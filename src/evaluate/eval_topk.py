@@ -1,7 +1,11 @@
 import pandas as pd
 import numpy as np
 from collections import defaultdict
-from src.evaluation.topk_metrics import *
+from src.evaluate.topk_metrics import (
+    precision_at_k,
+    recall_at_k,
+    ndcg_at_k,
+)
 
 def evaluate_topk(model, ratings_df, num_items, k=10):
     user_items = defaultdict(list)
