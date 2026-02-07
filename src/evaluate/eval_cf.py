@@ -1,7 +1,7 @@
 import torch
 import pandas as pd
 from torch.utils.data import DataLoader
-from src.evaluation.rating_metrics import mse, rmse, mae
+from src.evaluate.rating_metrics import mse, rmse, mae
 from src.data.ratings_dataset import RatingsDataset
 
 def evaluate_rating(model, test_path):
