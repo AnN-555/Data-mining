@@ -12,9 +12,8 @@ def main():
     dataset = RatingsDataset(DATA_PATH)
     loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 
-    num_users = dataset.num_users
-    num_items = dataset.num_items
-    model = MatrixFactorization(num_users, num_items)
+    num_users = dataset.user_ids.max().item() + 1
+    num_items = dataset.food_ids.max().item() + 1
 
     model = MatrixFactorization(num_users, num_items)
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)

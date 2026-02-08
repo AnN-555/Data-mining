@@ -32,10 +32,7 @@ def main():
     for epoch in range(5):
         total = 0
         for u, i, r in loader:
-            # Đảm bảo chỉ số item nằm trong phạm vi hợp lệ
-            i_clamped = torch.clamp(i, 0, text_emb.size(0) - 1)
-
-            pred = model(u, i_clamped, text_emb[i_clamped], nutri[i_clamped])
+            pred = model(u, i, text_emb[i], nutri[i])
             loss = loss_fn(pred, r)
 
             opt.zero_grad()
