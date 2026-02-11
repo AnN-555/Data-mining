@@ -4,9 +4,10 @@ from src.models.hybrid.hybrid import HybridModel
 from src.models.content.phobert import PhoBERTEncoder
 from src.data.ratings_dataset import RatingsDataset
 from torch.utils.data import DataLoader
+from pathlib import Path
 
-FOOD_PATH = "data/processed/foods_processed.csv"
-RATING_PATH = "data/processed/ratings_processed.csv"
+BASE_DIR = Path(__file__).resolve().parents[2]
+DATA_PATH = BASE_DIR / "data" / "processed" / "rating_processed.csv"
 
 def main():
     food_df = pd.read_csv(FOOD_PATH)
