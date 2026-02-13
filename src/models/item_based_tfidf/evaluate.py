@@ -6,7 +6,6 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error
 from model import ContentBasedTFIDFWeighted
 
-
 BASE_DIR = os.path.dirname(__file__)
 
 DATA_PATH = os.path.abspath(
@@ -14,7 +13,6 @@ DATA_PATH = os.path.abspath(
 )
 
 CONFIG_PATH = os.path.join(BASE_DIR, "best_params.json")
-
 
 def rmse(y_true, y_pred):
     return np.sqrt(mean_squared_error(y_true, y_pred))

@@ -21,9 +21,7 @@ class ContentBasedTFIDFWeighted:
         # user statistics (set when building profile)
         self.user_mean = None
 
-    # ==================================================
     # TRAIN ITEM FEATURES
-    # ==================================================
     def fit(self, df):
 
         # Unique food items
@@ -71,9 +69,7 @@ class ContentBasedTFIDFWeighted:
 
         print("Content model trained")
 
-    # ==================================================
     # BUILD USER PROFILE (CENTERED RATING)
-    # ==================================================
     def build_user_profile(self, user_df):
 
         profile = np.zeros(self.item_matrix.shape[1])
@@ -104,9 +100,7 @@ class ContentBasedTFIDFWeighted:
 
         return profile
 
-    # ==================================================
     # PREDICT RATING
-    # ==================================================
     def predict(self, user_profile, food_id):
 
         if food_id not in self.food_id_to_index:
