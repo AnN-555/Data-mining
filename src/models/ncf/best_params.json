@@ -1,0 +1,11 @@
+{
+    "best_params": {
+        "embedding_dim": 32,
+        "hidden_dim": 128,
+        "lr": 0.001,
+        "batch_size": 1024,
+        "epochs": 5,
+        "weight_decay": 1e-05
+    },
+    "best_rmse": 1.5957885014116457
+}
