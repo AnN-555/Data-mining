@@ -1,113 +1,107 @@
 import os
 import json
 import torch
-import numpy as np
 import pandas as pd
-from sklearn.model_selection import KFold
-from sklearn.metrics import mean_squared_error
+from torch.utils.data import TensorDataset, DataLoader
 
 from model import NCF
+from utils import create_mapping, apply_mapping
+
+# CONFIG
 
 BASE_DIR = os.path.dirname(__file__)
 DATA_PATH = os.path.abspath(
     os.path.join(BASE_DIR, "../../../data/processed/rating_train_val.csv")
 )
 
-SAVE_PATH = os.path.join(BASE_DIR, "best_params.json")
+BEST_PARAM_PATH = os.path.join(BASE_DIR, "best_params.json")
+MODEL_SAVE_PATH = os.path.join(BASE_DIR, "ncf_model.pt")
 
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def create_mapping(df):
-    user2idx = {u: i for i, u in enumerate(df["user_id"].unique())}
-    item2idx = {i: j for j, i in enumerate(df["food_id"].unique())}
-    return user2idx, item2idx
+# TRAIN FULL DATA
 
+def train_full(df, params):
 
-def convert(df, user2idx, item2idx):
-    users = df["user_id"].map(user2idx).values
-    items = df["food_id"].map(item2idx).values
-    ratings = df["rating"].values
-    return users, items, ratings
+    print("DEBUG: creating mapping...")
+    user2idx, item2idx = create_mapping(df)
 
+    print("DEBUG: applying mapping...")
+    users, items, ratings = apply_mapping(df, user2idx, item2idx)
 
-def train_one_fold(train_df, val_df, params):
-    user2idx, item2idx = create_mapping(train_df)
+    dataset = TensorDataset(users, items, ratings)
 
-    u_train, i_train, r_train = convert(train_df, user2idx, item2idx)
-    u_val, i_val, r_val = convert(val_df, user2idx, item2idx)
+    loader = DataLoader(
+        dataset,
+        batch_size=params["batch_size"],
+        shuffle=True
+    )
+
+    print("DEBUG: total batches =", len(loader))
 
     model = NCF(
         num_users=len(user2idx),
         num_items=len(item2idx),
         embedding_dim=params["embedding_dim"],
         hidden_dim=params["hidden_dim"]
+    ).to(DEVICE)
+
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=params["lr"],
+        weight_decay=params["weight_decay"]
     )
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
     criterion = torch.nn.MSELoss()
 
+    print("DEBUG: start training...")
     model.train()
 
-    for _ in range(params["epochs"]):
-        for u, i, r in zip(u_train, i_train, r_train):
-            u = torch.tensor([u])
-            i = torch.tensor([i])
-            r = torch.tensor([r], dtype=torch.float32)
+    for epoch in range(params["epochs"]):
+        total_loss = 0
+
+        for u, i, r in loader:
+            u = u.to(DEVICE)
+            i = i.to(DEVICE)
+            r = r.to(DEVICE)
 
             optimizer.zero_grad()
-            pred = model(u, i)
-            loss = criterion(pred, r)
+            preds = model(u, i)
+            loss = criterion(preds, r)
             loss.backward()
             optimizer.step()
 
-    # validation
-    model.eval()
-    preds = []
-    with torch.no_grad():
-        for u, i in zip(u_val, i_val):
-            u = torch.tensor([u])
-            i = torch.tensor([i])
-            pred = model(u, i).item()
-            preds.append(pred)
+            total_loss += loss.item()
 
-    rmse = np.sqrt(mean_squared_error(r_val, preds))
-    return rmse
+        print(f"Epoch {epoch+1} | Loss: {total_loss:.4f}")
 
+    return model, user2idx, item2idx
+
+# MAIN
 
 def main():
+
+    print("DEBUG: loading data...")
     df = pd.read_csv(DATA_PATH)
 
-    param_grid = [
-        {"embedding_dim": 32, "hidden_dim": 64, "lr": 0.001, "epochs": 5},
-        {"embedding_dim": 64, "hidden_dim": 128, "lr": 0.001, "epochs": 5},
-    ]
+    print("DEBUG: loading best params...")
+    with open(BEST_PARAM_PATH, "r") as f:
+        config = json.load(f)
 
-    kf = KFold(n_splits=3, shuffle=True, random_state=42)
+    params = config["best_params"]
+    print("Using params:", params)
 
-    best_rmse = float("inf")
-    best_params = None
+    model, user2idx, item2idx = train_full(df, params)
 
-    for params in param_grid:
-        print("Testing:", params)
-        rmses = []
+    print("DEBUG: saving model...")
+    torch.save({
+        "model_state_dict": model.state_dict(),
+        "user2idx": user2idx,
+        "item2idx": item2idx,
+        "params": params
+    }, MODEL_SAVE_PATH)
 
-        for train_idx, val_idx in kf.split(df):
-            train_df = df.iloc[train_idx]
-            val_df = df.iloc[val_idx]
-
-            rmse = train_one_fold(train_df, val_df, params)
-            rmses.append(rmse)
-
-        avg_rmse = np.mean(rmses)
-        print("Avg RMSE:", avg_rmse)
-
-        if avg_rmse < best_rmse:
-            best_rmse = avg_rmse
-            best_params = params
-
-    with open(SAVE_PATH, "w") as f:
-        json.dump(best_params, f, indent=4)
-
-    print("Best params:", best_params)
+    print("Model saved at:", MODEL_SAVE_PATH)
 
 
 if __name__ == "__main__":

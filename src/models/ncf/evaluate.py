@@ -3,10 +3,15 @@ import json
 import torch
 import numpy as np
 import pandas as pd
+from itertools import product
+from torch.utils.data import TensorDataset, DataLoader
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error
 
 from model import NCF
+from utils import create_mapping, apply_mapping
+
+# CONFIG
 
 BASE_DIR = os.path.dirname(__file__)
 DATA_PATH = os.path.abspath(
@@ -15,99 +20,142 @@ DATA_PATH = os.path.abspath(
 
 SAVE_PATH = os.path.join(BASE_DIR, "best_params.json")
 
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def create_mapping(df):
-    user2idx = {u: i for i, u in enumerate(df["user_id"].unique())}
-    item2idx = {i: j for j, i in enumerate(df["food_id"].unique())}
-    return user2idx, item2idx
-
-
-def convert(df, user2idx, item2idx):
-    users = df["user_id"].map(user2idx).values
-    items = df["food_id"].map(item2idx).values
-    ratings = df["rating"].values
-    return users, items, ratings
-
+# TRAIN 1 FOLD
 
 def train_one_fold(train_df, val_df, params):
+
     user2idx, item2idx = create_mapping(train_df)
 
-    u_train, i_train, r_train = convert(train_df, user2idx, item2idx)
-    u_val, i_val, r_val = convert(val_df, user2idx, item2idx)
+    u_train, i_train, r_train = apply_mapping(train_df, user2idx, item2idx)
+    u_val, i_val, r_val = apply_mapping(val_df, user2idx, item2idx)
+
+    train_dataset = TensorDataset(u_train, i_train, r_train)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=params["batch_size"],
+        shuffle=True
+    )
 
     model = NCF(
         num_users=len(user2idx),
         num_items=len(item2idx),
         embedding_dim=params["embedding_dim"],
         hidden_dim=params["hidden_dim"]
+    ).to(DEVICE)
+
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=params["lr"],
+        weight_decay=params["weight_decay"]
     )
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"])
     criterion = torch.nn.MSELoss()
 
+    # ---- Training ----
     model.train()
+    for epoch in range(params["epochs"]):
+        total_loss = 0
 
-    for _ in range(params["epochs"]):
-        for u, i, r in zip(u_train, i_train, r_train):
-            u = torch.tensor([u])
-            i = torch.tensor([i])
-            r = torch.tensor([r], dtype=torch.float32)
+        for users, items, ratings in train_loader:
+            users = users.to(DEVICE)
+            items = items.to(DEVICE)
+            ratings = ratings.to(DEVICE)
 
             optimizer.zero_grad()
-            pred = model(u, i)
-            loss = criterion(pred, r)
+            preds = model(users, items)
+            loss = criterion(preds, ratings)
             loss.backward()
             optimizer.step()
 
-    # validation
+            total_loss += loss.item()
+
+        print(f"   Epoch {epoch+1} | Loss: {total_loss:.4f}")
+
+    # ---- Validation ----
     model.eval()
     preds = []
+
     with torch.no_grad():
         for u, i in zip(u_val, i_val):
-            u = torch.tensor([u])
-            i = torch.tensor([i])
+            u = u.unsqueeze(0).to(DEVICE)
+            i = i.unsqueeze(0).to(DEVICE)
             pred = model(u, i).item()
             preds.append(pred)
 
-    rmse = np.sqrt(mean_squared_error(r_val, preds))
+    rmse = np.sqrt(mean_squared_error(r_val.numpy(), preds))
+
     return rmse
 
-
+# MAIN GRID SEARCH 5CV
 def main():
+
     df = pd.read_csv(DATA_PATH)
+    print("DEBUG: total rows =", len(df))
 
-    param_grid = [
-        {"embedding_dim": 32, "hidden_dim": 64, "lr": 0.001, "epochs": 5},
-        {"embedding_dim": 64, "hidden_dim": 128, "lr": 0.001, "epochs": 5},
-    ]
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
 
-    kf = KFold(n_splits=3, shuffle=True, random_state=42)
+    # ---- Grid Search Space ----
+    param_grid = {
+        "embedding_dim": [16, 32],
+        "hidden_dim": [64, 128],
+        "lr": [0.001, 0.0005],
+        "batch_size": [512, 1024],
+        "epochs": [5],
+        "weight_decay": [0.0, 1e-5]
+    }
+
+    keys = list(param_grid.keys())
+    combinations = list(product(*param_grid.values()))
 
     best_rmse = float("inf")
     best_params = None
 
-    for params in param_grid:
-        print("Testing:", params)
-        rmses = []
+    print("\nTOTAL CONFIGS:", len(combinations))
+    print("=" * 50)
 
-        for train_idx, val_idx in kf.split(df):
+    # ---- Loop all configs ----
+    for idx, values in enumerate(combinations):
+
+        params = dict(zip(keys, values))
+
+        print(f"\nCONFIG {idx+1}/{len(combinations)}")
+        print("Params:", params)
+
+        fold_rmses = []
+
+        for fold, (train_idx, val_idx) in enumerate(kf.split(df)):
+
+            print(f"\n   Fold {fold+1}")
+
             train_df = df.iloc[train_idx]
             val_df = df.iloc[val_idx]
 
             rmse = train_one_fold(train_df, val_df, params)
-            rmses.append(rmse)
+            print(f"   Fold RMSE: {rmse:.4f}")
 
-        avg_rmse = np.mean(rmses)
-        print("Avg RMSE:", avg_rmse)
+            fold_rmses.append(rmse)
 
-        if avg_rmse < best_rmse:
-            best_rmse = avg_rmse
+        mean_rmse = np.mean(fold_rmses)
+
+        print("\n>>> Mean CV RMSE:", mean_rmse)
+
+        if mean_rmse < best_rmse:
+            best_rmse = mean_rmse
             best_params = params
+            print("NEW BEST!")
+
+    # ---- Save Best ----
+    print("\n" + "=" * 50)
+    print("BEST PARAMS:", best_params)
+    print("BEST RMSE:", best_rmse)
 
     with open(SAVE_PATH, "w") as f:
-        json.dump(best_params, f, indent=4)
-
-    print("Best params:", best_params)
+        json.dump({
+            "best_params": best_params,
+            "best_rmse": best_rmse
+        }, f, indent=4)
 
 
 if __name__ == "__main__":

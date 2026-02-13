@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class NCF(nn.Module):
-    def __init__(self, num_users, num_items, embedding_dim=64, hidden_dim=128):
+    def __init__(self, num_users, num_items, embedding_dim=32, hidden_dim=64):
         super(NCF, self).__init__()
 
         self.user_embedding = nn.Embedding(num_users, embedding_dim)
@@ -14,14 +14,14 @@ class NCF(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim // 2),
             nn.ReLU(),
-            nn.Linear(hidden_dim // 2, 1)
+            nn.Linear(hidden_dim // 2, 1),
         )
 
     def forward(self, user, item):
-        user_vec = self.user_embedding(user)
-        item_vec = self.item_embedding(item)
+        user_emb = self.user_embedding(user)
+        item_emb = self.item_embedding(item)
 
-        x = torch.cat([user_vec, item_vec], dim=1)
-        output = self.mlp(x)
+        x = torch.cat([user_emb, item_emb], dim=1)
+        out = self.mlp(x)
 
-        return output.view(-1)   # giữ shape [batch]
+        return out.view(-1)

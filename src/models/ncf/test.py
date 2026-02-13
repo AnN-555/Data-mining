@@ -1,63 +1,88 @@
 import os
-import pickle
 import torch
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 from model import NCF
 
-BASE_DIR = os.path.dirname(__file__)
+# CONFIG
 
+BASE_DIR = os.path.dirname(__file__)
 TEST_PATH = os.path.abspath(
     os.path.join(BASE_DIR, "../../../data/processed/rating_test.csv")
 )
 
 MODEL_PATH = os.path.join(BASE_DIR, "ncf_model.pt")
-MAPPING_PATH = os.path.join(BASE_DIR, "mapping.pkl")
-PARAM_PATH = os.path.join(BASE_DIR, "best_params.json")
 
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# MAIN
 
 def main():
-    df = pd.read_csv(TEST_PATH)
 
-    with open(MAPPING_PATH, "rb") as f:
-        user2idx, item2idx = pickle.load(f)
+    print("DEBUG: loading model...")
+    checkpoint = torch.load(
+        MODEL_PATH,
+        map_location=DEVICE,
+        weights_only=False
+    )
 
-    with open(PARAM_PATH) as f:
-        params = json.load(f)
+    user2idx = checkpoint["user2idx"]
+    item2idx = checkpoint["item2idx"]
+    params = checkpoint["params"]
 
     model = NCF(
         num_users=len(user2idx),
         num_items=len(item2idx),
         embedding_dim=params["embedding_dim"],
         hidden_dim=params["hidden_dim"]
-    )
+    ).to(DEVICE)
 
-    model.load_state_dict(torch.load(MODEL_PATH))
+    model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
 
+    print("DEBUG: loading test data...")
+    df = pd.read_csv(TEST_PATH)
+
     preds = []
-    true = []
+    targets = []
+
+    print("DEBUG: evaluating...")
 
     with torch.no_grad():
         for _, row in df.iterrows():
-            if row["user_id"] not in user2idx:
-                continue
-            if row["food_id"] not in item2idx:
+
+            user = row["user_id"]
+            item = row["food_id"]
+            rating = row["rating"]
+
+            # Skip unseen users/items
+            if user not in user2idx or item not in item2idx:
                 continue
 
-            u = torch.tensor([user2idx[row["user_id"]]])
-            i = torch.tensor([item2idx[row["food_id"]]])
+            u = torch.tensor([user2idx[user]]).to(DEVICE)
+            i = torch.tensor([item2idx[item]]).to(DEVICE)
 
             pred = model(u, i).item()
 
             preds.append(pred)
-            true.append(row["rating"])
+            targets.append(rating)
 
-    rmse = np.sqrt(mean_squared_error(true, preds))
-    print("Test RMSE:", rmse)
+    # METRICS
 
+    rmse = np.sqrt(mean_squared_error(targets, preds))
+    mae = mean_absolute_error(targets, preds)
+
+    rating_min = min(targets)
+    rating_max = max(targets)
+
+    nmae = mae / (rating_max - rating_min)
+
+    print("\nFinal Test Results")
+    print(f"RMSE : {rmse:.6f}")
+    print(f"MAE  : {mae:.6f}")
+    print(f"NMAE : {nmae:.6f}")
 
 if __name__ == "__main__":
     main()
