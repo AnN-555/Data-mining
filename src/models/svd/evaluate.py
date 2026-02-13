@@ -7,11 +7,9 @@ from sklearn.metrics import mean_squared_error
 
 from model import SVD
 
-
 BASE_DIR = os.path.dirname(__file__)
 DATA_PATH = os.path.abspath(os.path.join(BASE_DIR, "../../../data/processed/rating_train_val.csv"))
 SAVE_PATH = os.path.join(BASE_DIR, "best_params.json")
-
 
 def create_mapping(df):
     user2idx = {u: i for i, u in enumerate(df["user_id"].unique())}
@@ -60,9 +58,10 @@ def run_cv(params):
 
 def main():
     param_grid = [
-        {"k": 32, "lr": 0.005, "reg": 0.02, "epochs": 20},
-        {"k": 64, "lr": 0.005, "reg": 0.02, "epochs": 25},
-        {"k": 64, "lr": 0.003, "reg": 0.01, "epochs": 30},
+        {"k": 64,  "lr": 0.003, "reg": 0.02,  "epochs": 40},
+        {"k": 128, "lr": 0.003, "reg": 0.02,  "epochs": 50},
+        {"k": 128, "lr": 0.002, "reg": 0.015, "epochs": 60},
+        {"k": 256, "lr": 0.002, "reg": 0.02,  "epochs": 60},
     ]
 
     best_rmse = float("inf")
@@ -83,7 +82,6 @@ def main():
         json.dump(best_params, f, indent=4)
 
     print("Saved best_params.json")
-
 
 if __name__ == "__main__":
     main()

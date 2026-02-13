@@ -13,7 +13,6 @@ def main():
     ratings = pd.read_csv(os.path.join(DATA_PATH, "rating_processed.csv"))
     combined = pd.read_csv(os.path.join(DATA_PATH, "combined_dataset.csv"))
 
-    # Chuẩn hóa cột
     ratings.columns = ratings.columns.str.strip()
     combined.columns = combined.columns.str.strip()
 
@@ -28,19 +27,29 @@ def main():
     })
 
     print("Total ratings:", len(ratings))
+    print("Total users:", ratings["user_id"].nunique())
 
-    # Split rating (90/10)
-    rating_train_val, rating_test = train_test_split(
-        ratings,
-        test_size=0.1,
-        random_state=42,
-        shuffle=True
-    )
+    # SPLIT USER
+    train_list = []
+    test_list = []
+
+    for user_id, group in ratings.groupby("user_id"):
+        train_u, test_u = train_test_split(
+            group,
+            test_size=0.1,
+            random_state=42,
+            shuffle=True
+        )
+        train_list.append(train_u)
+        test_list.append(test_u)
+
+    rating_train_val = pd.concat(train_list).reset_index(drop=True)
+    rating_test = pd.concat(test_list).reset_index(drop=True)
 
     print("Train+Val:", len(rating_train_val))
     print("Test:", len(rating_test))
 
-    # Split combined theo rating split
+    # Split combined rating split
     combined_train_val = combined.merge(
         rating_train_val[["user_id", "food_id"]],
         on=["user_id", "food_id"],
