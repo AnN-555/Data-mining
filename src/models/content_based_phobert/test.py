@@ -7,32 +7,45 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 BASE_DIR = os.path.dirname(__file__)
 
+TRAIN_PATH = os.path.abspath(
+    os.path.join(BASE_DIR, "../../../data/processed/combined_train_val.csv")
+)
+
 TEST_PATH = os.path.abspath(
     os.path.join(BASE_DIR, "../../../data/processed/rating_test.csv")
 )
 
-MODEL_PATH = os.path.join(BASE_DIR, "content_model.pkl")
+MODEL_PATH = os.path.join(BASE_DIR, "phobert_model.pkl")
 
 
 def rmse(y_true, y_pred):
     return np.sqrt(mean_squared_error(y_true, y_pred))
 
 
+def nmae(y_true, y_pred):
+    return mean_absolute_error(y_true, y_pred) / 5.0
+
+
 def main():
 
-    df_test = pd.read_csv(TEST_PATH)
+    train_df = pd.read_csv(TRAIN_PATH)
+    test_df = pd.read_csv(TEST_PATH)
 
     with open(MODEL_PATH, "rb") as f:
         model = pickle.load(f)
 
     y_true, y_pred = [], []
 
-    for user_id in df_test["user_id"].unique():
-        user_data = df_test[df_test["user_id"] == user_id]
+    for user_id in test_df["user_id"].unique():
 
-        user_profile = model.build_user_profile(user_data)
+        train_user = train_df[train_df["user_id"] == user_id]
+        if len(train_user) == 0:
+            continue
 
-        for _, row in user_data.iterrows():
+        user_profile = model.build_user_profile(train_user)
+        test_user = test_df[test_df["user_id"] == user_id]
+
+        for _, row in test_user.iterrows():
 
             pred = model.predict(user_profile, row["food_id"])
 
@@ -43,7 +56,8 @@ def main():
     print("\nFinal Test Results")
     print("RMSE:", rmse(y_true, y_pred))
     print("MAE:", mean_absolute_error(y_true, y_pred))
-    print("NMAE:", mean_absolute_error(y_true, y_pred)/5)
+    print("NMAE:", nmae(y_true, y_pred))
+
 
 if __name__ == "__main__":
     main()
