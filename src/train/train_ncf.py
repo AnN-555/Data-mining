@@ -3,7 +3,10 @@ from torch.utils.data import DataLoader
 from src.data.ratings_dataset import RatingsDataset
 from src.models.ncf.ncf import NCF
 
-DATA_PATH = "data/processed/ratings_processed.csv"
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+DATA_PATH = BASE_DIR / "data" / "processed" / "rating_processed.csv"
 
 def main():
     dataset = RatingsDataset(DATA_PATH)

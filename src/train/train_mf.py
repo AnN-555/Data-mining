@@ -2,8 +2,10 @@ import torch
 from torch.utils.data import DataLoader
 from src.data.ratings_dataset import RatingsDataset
 from src.models.mf.mf import MatrixFactorization
+from pathlib import Path
 
-DATA_PATH = "data/processed/ratings_processed.csv"
+BASE_DIR = Path(__file__).resolve().parents[2]
+DATA_PATH = BASE_DIR / "data" / "processed" / "rating_processed.csv"
 EPOCHS = 10
 BATCH_SIZE = 256
 LR = 1e-3

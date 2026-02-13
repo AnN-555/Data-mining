@@ -1,6 +1,6 @@
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-
+from pathlib import Path
 TEXT_COLS = [
     "dish_name",
     "description",
@@ -17,8 +17,11 @@ NUTRITION_COLS = [
     "protein"
 ]
 
+BASE_DIR = Path(__file__).resolve().parents[2]
+csv_path = BASE_DIR / "data" / "processed" / "foods_processed.csv"
 
-def load_foods(path="data/processed/foods_processed.csv"):
+
+def load_foods(path=csv_path):
     """
     Load processed food dataset
     """
@@ -49,3 +52,15 @@ def build_nutrition_feature(df, scale=True):
         X = scaler.fit_transform(X)
 
     return X
+
+if __name__ == "__main__":
+    df = load_foods()
+    print("Load OK:", df.shape)
+
+    df = build_text_feature(df)
+    print("Text feature OK")
+
+    X = build_nutrition_feature(df)
+    print("Nutrition feature shape:", X.shape)
+
+    print("Done 🚀")

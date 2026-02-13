@@ -1,7 +1,10 @@
 import pandas as pd
 from src.models.content.phobert import PhoBERTEncoder
 
-DATA_PATH = "data/processed/foods_processed.csv"
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+DATA_PATH = BASE_DIR / "data" / "processed" / "foods_processed.csv"
 
 def main():
     df = pd.read_csv(DATA_PATH)
