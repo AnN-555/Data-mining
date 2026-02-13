@@ -1,9 +1,6 @@
-python -m src.train.train_mf
-
-python -m src.train.train_tfidf
-
-python -m src.train.train_ncf
-
-python -m src.train.train_phobert
-
-python -m src.train.train_hybrid
+#Run Model
+##User_based model
+```python .\src\models\user_based\evaluate.py```
+```python .\src\models\user_based\train.py```
+```python .\src\models\user_based\test.py```
+##Content_based model
